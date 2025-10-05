@@ -13,7 +13,7 @@ app.use(express.json()); // Allows server to read JSON data from requests
 
 // --- Status Endpoint ---
 app.get('/api/status', (req, res) => {
-    res.status(200).json({ status: 'online', version: '1.3.0' }); // Updated version
+    res.status(200).json({ status: 'online', version: '1.4.0' }); // Updated version
 });
 
 // Main endpoint to get video info
@@ -32,6 +32,7 @@ app.post('/api/get-info', async (req, res) => {
             'Accept-Encoding': 'gzip, deflate, br',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
             'Connection': 'keep-alive',
+            'Referer': 'https://www.terabox.com/', // Added Referer for better authenticity
         };
 
         const response = await axios.get(teraboxUrl, { headers });
@@ -40,7 +41,7 @@ app.post('/api/get-info', async (req, res) => {
         let directLink = '';
         let title = '';
 
-        // --- UPDATED: More Robust Scraping Logic ---
+        // --- UPDATED: More Advanced Scraping Logic ---
         // This is the "new map". It tries multiple modern methods to find the video link.
         
         // Method 1: Look for JSON data within script tags (very common pattern)
@@ -63,11 +64,20 @@ app.post('/api/get-info', async (req, res) => {
                 }
             }
         });
+
+        // Method 2: If the first method fails, search for a generic high-quality video URL.
+        if (!directLink) {
+            const pageContent = response.data;
+            const videoUrlMatch = pageContent.match(/https?:\/\/[^"]+?\.mp4[^"]*/);
+            if (videoUrlMatch && videoUrlMatch[0]) {
+                directLink = videoUrlMatch[0];
+            }
+        }
         
         // Find the title from the <title> tag in the head
         title = $('head > title').text().trim();
-        if (!title) {
-            // Fallback title if the head title is not found
+        if (!title || title.toLowerCase().includes('terabox')) {
+            // Fallback title if the head title is generic or not found
             title = 'TeraBox Video';
         }
 
