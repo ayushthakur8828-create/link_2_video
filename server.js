@@ -1,4 +1,3 @@
-// server.js
 const express = require('express');
 const puppeteer = require('puppeteer');
 const cors = require('cors');
@@ -16,6 +15,12 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Serve a simple frontend
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// API endpoints
 app.get('/api/status', (req, res) => {
   res.status(200).json({ status: 'online', version: '1.4.0' });
 });
@@ -36,7 +41,6 @@ app.post('/api/get-info', async (req, res) => {
 
   let browser = null;
   try {
-    // Launch Puppeteer suitable for cloud containers
     browser = await puppeteer.launch({
       headless: true,
       args: [
@@ -53,8 +57,6 @@ app.post('/api/get-info', async (req, res) => {
     });
 
     const page = await browser.newPage();
-
-    // Reduce bot detection
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
     await page.setExtraHTTPHeaders({
       'Accept-Language': 'en-US,en;q=0.9',
@@ -63,14 +65,11 @@ app.post('/api/get-info', async (req, res) => {
 
     await page.goto(teraboxUrl, { waitUntil: 'networkidle2', timeout: 60000 });
 
-    // optional quick wait for video tag
     try { await page.waitForSelector('video', { timeout: 7000 }); } catch (e) {}
 
-    // extraction inside the page
     let videoData = await page.evaluate(() => {
       let directLink = '';
       let title = document.title || 'TeraBox Video';
-
       const v = document.querySelector('video');
       if (v && v.src) directLink = v.src;
 
@@ -98,19 +97,10 @@ app.post('/api/get-info', async (req, res) => {
       return { directLink, title };
     });
 
-    // fallback: do regex on the final HTML (node side)
     if (!videoData.directLink) {
       const html = await page.content();
       const match = html.match(/https?:\/\/[^"']+?\.mp4[^"']*/);
       if (match && match[0]) videoData.directLink = match[0];
-    }
-
-    // debug files if requested
-    if (process.env.DEBUG_PUPPETEER === 'true') {
-      const debugDir = path.resolve(__dirname, 'debug');
-      if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir);
-      await page.screenshot({ path: path.join(debugDir, `screenshot-${Date.now()}.png`), fullPage: true });
-      fs.writeFileSync(path.join(debugDir, `page-${Date.now()}.html`), await page.content());
     }
 
     if (videoData.directLink) {
